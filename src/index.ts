@@ -1,7 +1,7 @@
 import { Connection } from "@solana/web3.js";
 import { Command } from "commander";
 import { RPC_ENDPOINT, USER_KEYPAIR } from "./constants";
-import { createTokenAccounts, swapTokens } from "./janitor";
+import { createTokenAccounts, createTokenLedger, swapTokens } from "./janitor";
 
 const CONNECTION = new Connection(RPC_ENDPOINT);
 const KEEP_TOKEN_MINTS = new Set([
@@ -44,6 +44,19 @@ program
   )
   .action(async ({ dryRun }) => {
     await swapTokens(CONNECTION, USER_KEYPAIR, KEEP_TOKEN_MINTS, dryRun);
+  });
+
+program
+  .command("create-token-ledger")
+  .option("-k, --keypair <path>", "Custom keypair for your token ledger")
+  .option("-d, --dry-run")
+  .addHelpText(
+    "beforeAll",
+    "Create a custom token ledger that you can use to track your transactions on Jupiter"
+  )
+  .action(async ({ keypair, dryRun }) => {
+    console.log("keypair:", keypair);
+    await createTokenLedger(CONNECTION, USER_KEYPAIR, keypair, dryRun);
   });
 
 program.parse();
