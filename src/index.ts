@@ -1,7 +1,7 @@
 import { Connection } from "@solana/web3.js";
 import { Command } from "commander";
 import { RPC_ENDPOINT, USER_KEYPAIR } from "./constants";
-import { createTokenAccounts } from "./janitor";
+import { createTokenAccounts, swapTokens } from "./janitor";
 
 const CONNECTION = new Connection(RPC_ENDPOINT);
 const KEEP_TOKEN_MINTS = new Set([
@@ -27,7 +27,7 @@ program
   )
   .option("-d, --dry-run")
   .addHelpText(
-    "afterAll",
+    "beforeAll",
     "Create token accounts based on top tokens, to reduce setup when trading or to setup platform fee accounts"
   )
   .action(async ({ tokensFromTop, dryRun }) => {
@@ -35,10 +35,15 @@ program
     await createTokenAccounts(CONNECTION, USER_KEYPAIR, tokensFromTop, dryRun);
   });
 
-// TODO
-// program
-//   .command("swap-tokens")
-//   .option("")
-//   .action(async () => {});
+program
+  .command("swap-tokens")
+  .option("-d, --dry-run")
+  .addHelpText(
+    "beforeAll",
+    "/!\\ Will swap any token that isn't in the keep array back to USDC"
+  )
+  .action(async ({ dryRun }) => {
+    await swapTokens(CONNECTION, USER_KEYPAIR, KEEP_TOKEN_MINTS, dryRun);
+  });
 
 program.parse();

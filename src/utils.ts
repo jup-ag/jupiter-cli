@@ -3,10 +3,14 @@ import {
   AccountInfo as TokenAccountInfo,
   u64,
 } from "@solana/spl-token";
-import { AccountInfo, PublicKey } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 
-export function deserializeAccount(data: Buffer): TokenAccountInfo {
+export function deserializeAccount(
+  address: PublicKey,
+  data: Buffer
+): TokenAccountInfo {
   const accountInfo = AccountLayout.decode(data);
+  accountInfo.address = address;
   accountInfo.mint = new PublicKey(accountInfo.mint);
   accountInfo.owner = new PublicKey(accountInfo.owner);
   accountInfo.amount = u64.fromBuffer(accountInfo.amount);
@@ -37,4 +41,8 @@ export function deserializeAccount(data: Buffer): TokenAccountInfo {
   }
 
   return accountInfo;
+}
+
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
