@@ -142,7 +142,7 @@ export async function swapTokens(
     const { routesInfos } = await jupiter.computeRoutes({
       inputMint: tokenAccountInfo.mint,
       outputMint: USDC_MINT,
-      inputAmount: 0,
+      inputAmount: tokenAccountInfo.amount.toNumber(),
       slippage: 0.5, // It should be a small amount so slippage can be set wide
       forceFetch: true,
     });
@@ -163,8 +163,22 @@ export async function swapTokens(
 
       expectedTotalOutAmount += bestRouteInfo.outAmount;
 
-      if (!dryRun) {
-        // Do the business of swapping here
+      console.log(
+        `Swap ${tokenAccountInfo.mint} for estimated ${
+          bestRouteInfo.outAmount / Math.pow(10, 6)
+        } USDC`
+      );
+
+      if (dryRun) continue;
+
+      const { execute } = await jupiter.exchange({
+        routeInfo: bestRouteInfo,
+      });
+      const swapResult = await execute();
+      if ("txid" in swapResult) {
+        console.log("Executed swap, signature:", swapResult.txid);
+      } else if ("error" in swapResult) {
+        console.log("error:", swapResult.error);
       }
     }
 
