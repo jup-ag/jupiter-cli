@@ -3,7 +3,8 @@ import {
   AccountInfo as TokenAccountInfo,
   u64,
 } from "@solana/spl-token";
-import { PublicKey } from "@solana/web3.js";
+import { Keypair, PublicKey } from "@solana/web3.js";
+import fs from "fs";
 
 export function deserializeAccount(
   address: PublicKey,
@@ -45,4 +46,16 @@ export function deserializeAccount(
 
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function loadKeypair(keypair: string): Keypair {
+  if (!keypair || keypair == "") {
+    throw new Error("Keypair is required!");
+  }
+
+  const loaded = Keypair.fromSecretKey(
+    new Uint8Array(JSON.parse(fs.readFileSync(keypair).toString()))
+  );
+
+  return loaded;
 }

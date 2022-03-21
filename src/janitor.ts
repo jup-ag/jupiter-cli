@@ -9,7 +9,7 @@ import {
 import { Connection, Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import fetch from "isomorphic-fetch";
 import { USDC_MINT } from "./constants";
-import { deserializeAccount, sleep } from "./utils";
+import { deserializeAccount, loadKeypair, sleep } from "./utils";
 
 type Address = string;
 
@@ -63,12 +63,9 @@ export async function createTokenAccounts(
   if (dryRun) return;
 
   // Create ATAs for missing token accounts
-  const blockhash = (await connection.getRecentBlockhash("finalized"))
-    .blockhash;
   const shortlistedMints = Array.from(shortlistedTokens);
   while (shortlistedMints.length > 0) {
     let tx = new Transaction({ feePayer: userKeypair.publicKey });
-    tx.recentBlockhash = blockhash;
 
     for (const mint of shortlistedMints.splice(0, 10)) {
       const mintPk = new PublicKey(mint);
@@ -92,8 +89,7 @@ export async function createTokenAccounts(
       );
     }
 
-    tx.sign(userKeypair);
-    const signature = await connection.sendRawTransaction(tx.serialize());
+    const signature = await connection.sendTransaction(tx, [userKeypair]);
     console.log("signature:", signature);
   }
 }
@@ -189,4 +185,37 @@ export async function swapTokens(
     "Expected total out amount (raw amount):",
     expectedTotalOutAmount
   );
+}
+
+export async function createTokenLedger(
+  connection: Connection,
+  userKeypair: Keypair,
+  ledgerKeypairPath: string | undefined = undefined,
+  dryRun: boolean
+) {
+  let ledgerKeypair: Keypair;
+  if (!ledgerKeypairPath) {
+    ledgerKeypair = Keypair.generate();
+  } else {
+    ledgerKeypair = loadKeypair(ledgerKeypairPath);
+  }
+
+  console.log(`Create token ledger ${ledgerKeypair.publicKey.toBase58()}`);
+
+  if (dryRun) return;
+
+  // Create the token ledger
+  let tx = new Transaction({ feePayer: userKeypair.publicKey });
+  tx.add(
+    Jupiter.createInitializeTokenLedgerInstruction(
+      ledgerKeypair.publicKey,
+      userKeypair.publicKey
+    )
+  );
+
+  const signature = await connection.sendTransaction(tx, [
+    userKeypair,
+    ledgerKeypair,
+  ]);
+  console.log("signature:", signature);
 }
