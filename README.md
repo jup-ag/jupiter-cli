@@ -9,7 +9,7 @@ What the CLI is trained to do:
 ## To start
 
 1. You first need to install all the dependencies with `yarn`.
-2. Locate or (setup your file system wallet)[https://docs.solana.com/wallet-guide/file-system-wallet#:~:text=A%20file%20system%20wallet%20exists,system%20wallet%20is%20not%20recommended.] .json file
+2. Locate or [setup your file system wallet](https://docs.solana.com/wallet-guide/file-system-wallet#:~:text=A%20file%20system%20wallet%20exists,system%20wallet%20is%20not%20recommended.) file
 3. Run `yarn start help` to see all the commands. You can also run `yarn start help command` to see what each command is for.
 
 ## Example
