@@ -1,17 +1,16 @@
 {
-  "name": "jupiter-janitor",
+  "name": "jupiter-cli",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "start": "tsc && node dist/index.js"
   },
-  "author": "Arrowana <8245419+Arrowana@users.noreply.github.com>",
+  "author": "Jupiter",
   "license": "MIT",
   "dependencies": {
-    "@jup-ag/core": "^1.0.0-beta.18",
+    "@jup-ag/core": "^1.0.0-beta.28",
     "@solana/spl-token": "0.1.8",
-    "@solana/web3.js": "^1.36.0",
-    "bs58": "^5.0.0",
+    "@solana/web3.js": "^1.47.3",
     "commander": "^9.1.0",
     "dotenv": "^16.0.0",
     "isomorphic-fetch": "^3.0.0",

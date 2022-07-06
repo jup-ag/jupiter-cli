@@ -1,7 +1,8 @@
 import { Connection } from "@solana/web3.js";
 import { Command } from "commander";
-import { RPC_ENDPOINT, USER_KEYPAIR } from "./constants";
+import { RPC_ENDPOINT } from "./constants";
 import { createTokenAccounts, createTokenLedger, swapTokens } from "./janitor";
+import { loadKeypair } from "./utils";
 
 const CONNECTION = new Connection(RPC_ENDPOINT);
 const KEEP_TOKEN_MINTS = new Set([
@@ -20,6 +21,7 @@ const program = new Command();
 
 program
   .command("create-token-accounts")
+  .requiredOption("-k, --keypair <keypair>")
   .option(
     "-t, --tokens-from-top",
     "Tokens from the top to create an account for",
@@ -30,33 +32,51 @@ program
     "beforeAll",
     "Create token accounts based on top tokens, to reduce setup when trading or to setup platform fee accounts"
   )
-  .action(async ({ tokensFromTop, dryRun }) => {
-    console.log("tokensFromTop:", tokensFromTop);
-    await createTokenAccounts(CONNECTION, USER_KEYPAIR, tokensFromTop, dryRun);
+  .action(async ({ keypair, tokensFromTop, dryRun }) => {
+    await createTokenAccounts(
+      CONNECTION,
+      loadKeypair(keypair),
+      tokensFromTop,
+      dryRun
+    );
   });
 
 program
   .command("swap-tokens")
+  .requiredOption("-k, --keypair <KEYPAIR>")
   .option("-d, --dry-run")
   .addHelpText(
     "beforeAll",
     "/!\\ Will swap any token that isn't in the keep array back to USDC"
   )
-  .action(async ({ dryRun }) => {
-    await swapTokens(CONNECTION, USER_KEYPAIR, KEEP_TOKEN_MINTS, dryRun);
+  .action(async ({ keypair, dryRun }) => {
+    await swapTokens(
+      CONNECTION,
+      loadKeypair(keypair),
+      KEEP_TOKEN_MINTS,
+      dryRun
+    );
   });
 
 program
   .command("create-token-ledger")
-  .option("-k, --keypair <path>", "Custom keypair for your token ledger")
+  .requiredOption("-k, --keypair <keypair>")
+  .option(
+    "-t, --token-ledger-keypair <path>",
+    "Custom keypair for your token ledger"
+  )
   .option("-d, --dry-run")
   .addHelpText(
     "beforeAll",
     "Create a custom token ledger that you can use to track your transactions on Jupiter"
   )
-  .action(async ({ keypair, dryRun }) => {
-    console.log("keypair:", keypair);
-    await createTokenLedger(CONNECTION, USER_KEYPAIR, keypair, dryRun);
+  .action(async ({ keypair, tokenLedgerKeypair, dryRun }) => {
+    await createTokenLedger(
+      CONNECTION,
+      loadKeypair(keypair),
+      tokenLedgerKeypair,
+      dryRun
+    );
   });
 
 program.parse();
