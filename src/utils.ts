@@ -48,13 +48,9 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function loadKeypair(keypair: string): Keypair {
-  if (!keypair || keypair == "") {
-    throw new Error("Keypair is required!");
-  }
-
+export function loadKeypair(keypairPath: string): Keypair {
   const loaded = Keypair.fromSecretKey(
-    new Uint8Array(JSON.parse(fs.readFileSync(keypair).toString()))
+    new Uint8Array(JSON.parse(fs.readFileSync(keypairPath, "utf8")))
   );
 
   return loaded;

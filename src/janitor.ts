@@ -124,6 +124,8 @@ export async function swapTokens(
     ({ mint }) => !keepTokenMints.has(mint.toBase58())
   );
 
+  const routeMap = jupiter.getRouteMap();
+
   console.log(
     `Token accounts to swap back to USDC: ${tokenAccountInfosToSwap.length}`
   );
@@ -132,6 +134,19 @@ export async function swapTokens(
   for (const tokenAccountInfo of tokenAccountInfosToSwap) {
     if (tokenAccountInfo.amount.eq(new u64(0))) {
       // Skip if empty
+      continue;
+    }
+
+    if (
+      !routeMap
+        .get(tokenAccountInfo.mint.toBase58())
+        ?.includes(USDC_MINT.toBase58())
+    ) {
+      console.log(
+        `Skipping swapping ${tokenAccountInfo.amount.toNumber()} of ${
+          tokenAccountInfo.mint
+        } because no route available in route map for this token`
+      );
       continue;
     }
 
@@ -145,7 +160,7 @@ export async function swapTokens(
     if (routesInfos.length > 1) {
       const bestRouteInfo = routesInfos[0]!;
 
-      if (bestRouteInfo.outAmount < 100_000) {
+      if (bestRouteInfo.outAmount < 50_000) {
         // Less than 10 cents so not worth attempting to swap
         console.log(
           `Skipping swapping ${

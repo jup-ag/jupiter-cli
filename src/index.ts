@@ -33,7 +33,6 @@ program
     "Create token accounts based on top tokens, to reduce setup when trading or to setup platform fee accounts"
   )
   .action(async ({ keypair, tokensFromTop, dryRun }) => {
-    console.log("tokensFromTop:", tokensFromTop);
     await createTokenAccounts(
       CONNECTION,
       loadKeypair(keypair),
@@ -44,14 +43,13 @@ program
 
 program
   .command("swap-tokens")
-  .requiredOption("-k, --keypair <keypair>")
+  .requiredOption("-k, --keypair <KEYPAIR>")
   .option("-d, --dry-run")
   .addHelpText(
     "beforeAll",
     "/!\\ Will swap any token that isn't in the keep array back to USDC"
   )
   .action(async ({ keypair, dryRun }) => {
-    console.log(keypair);
     await swapTokens(
       CONNECTION,
       loadKeypair(keypair),
@@ -73,7 +71,6 @@ program
     "Create a custom token ledger that you can use to track your transactions on Jupiter"
   )
   .action(async ({ keypair, tokenLedgerKeypair, dryRun }) => {
-    console.log("keypair:", keypair);
     await createTokenLedger(
       CONNECTION,
       loadKeypair(keypair),
