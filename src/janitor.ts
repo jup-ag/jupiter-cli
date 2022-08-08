@@ -10,6 +10,7 @@ import { Connection, Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import fetch from "isomorphic-fetch";
 import { USDC_MINT } from "./constants";
 import { deserializeAccount, loadKeypair, sleep } from "./utils";
+import JSBI from 'jsbi';
 
 type Address = string;
 
@@ -130,7 +131,7 @@ export async function swapTokens(
     `Token accounts to swap back to USDC: ${tokenAccountInfosToSwap.length}`
   );
 
-  let expectedTotalOutAmount = 0;
+  let expectedTotalOutAmount = JSBI.BigInt(0);
   for (const tokenAccountInfo of tokenAccountInfosToSwap) {
     if (tokenAccountInfo.amount.eq(new u64(0))) {
       // Skip if empty
@@ -153,18 +154,18 @@ export async function swapTokens(
     const { routesInfos } = await jupiter.computeRoutes({
       inputMint: tokenAccountInfo.mint,
       outputMint: USDC_MINT,
-      inputAmount: tokenAccountInfo.amount.toNumber(),
+      amount: JSBI.BigInt((tokenAccountInfo.amount.toNumber())),
       slippage: 0.5, // It should be a small amount so slippage can be set wide
       forceFetch: true,
     });
     if (routesInfos.length > 1) {
       const bestRouteInfo = routesInfos[0]!;
 
-      if (bestRouteInfo.outAmount < 50_000) {
+      if (JSBI.BigInt(bestRouteInfo.outAmount) < JSBI.BigInt((50_000))) {
         // Less than 10 cents so not worth attempting to swap
         console.log(
           `Skipping swapping ${
-            bestRouteInfo.outAmount / Math.pow(10, 6)
+            JSBI.divide((bestRouteInfo.outAmount), JSBI.BigInt(Math.pow(10, 6)))
           } worth of ${
             tokenAccountInfo.mint
           } in ${tokenAccountInfo.address.toBase58()}`
@@ -172,11 +173,11 @@ export async function swapTokens(
         continue;
       }
 
-      expectedTotalOutAmount += bestRouteInfo.outAmount;
+      expectedTotalOutAmount = JSBI.add(expectedTotalOutAmount, bestRouteInfo.outAmount) ;
 
       console.log(
         `Swap ${tokenAccountInfo.mint} for estimated ${
-          bestRouteInfo.outAmount / Math.pow(10, 6)
+          JSBI.divide((bestRouteInfo.outAmount), JSBI.BigInt(Math.pow(10, 6)))
         } USDC`
       );
 
