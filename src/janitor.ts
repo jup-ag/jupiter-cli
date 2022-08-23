@@ -10,7 +10,7 @@ import { Connection, Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import fetch from "isomorphic-fetch";
 import { USDC_MINT } from "./constants";
 import { deserializeAccount, loadKeypair, sleep } from "./utils";
-import JSBI from 'jsbi';
+import JSBI from "jsbi";
 
 type Address = string;
 
@@ -31,9 +31,11 @@ async function getTokenAccountInfos(
 
 export async function createTokenAccounts(
   connection: Connection,
-  userKeypair: Keypair,
+  owner: PublicKey,
+  payerKeypair: Keypair,
   tokensFromTop: number,
-  dryRun: boolean
+  dryRun: boolean,
+  allowOwnerOffCurve: boolean
 ) {
   // Top tokens are the most traded tokens, token #60 is about 30k USD of volume a day
   const topTokens = (await (
@@ -41,10 +43,7 @@ export async function createTokenAccounts(
   ).json()) as Address[];
 
   const shortlistedTokens = new Set(topTokens.slice(0, tokensFromTop));
-  const tokenAccountInfos = await getTokenAccountInfos(
-    connection,
-    userKeypair.publicKey
-  );
+  const tokenAccountInfos = await getTokenAccountInfos(connection, owner);
   const exitingPlatformFeeAccountMints = new Set(
     tokenAccountInfos.map(({ mint }) => mint.toBase58())
   );
@@ -66,7 +65,7 @@ export async function createTokenAccounts(
   // Create ATAs for missing token accounts
   const shortlistedMints = Array.from(shortlistedTokens);
   while (shortlistedMints.length > 0) {
-    let tx = new Transaction({ feePayer: userKeypair.publicKey });
+    let tx = new Transaction({ feePayer: payerKeypair.publicKey });
 
     for (const mint of shortlistedMints.splice(0, 10)) {
       const mintPk = new PublicKey(mint);
@@ -74,7 +73,8 @@ export async function createTokenAccounts(
         ASSOCIATED_TOKEN_PROGRAM_ID,
         TOKEN_PROGRAM_ID,
         mintPk,
-        userKeypair.publicKey
+        owner,
+        allowOwnerOffCurve
       );
       tx.add(
         ...[
@@ -83,14 +83,14 @@ export async function createTokenAccounts(
             TOKEN_PROGRAM_ID,
             new PublicKey(mintPk),
             ta,
-            userKeypair.publicKey,
-            userKeypair.publicKey
+            owner,
+            payerKeypair.publicKey
           ),
         ]
       );
     }
 
-    const signature = await connection.sendTransaction(tx, [userKeypair]);
+    const signature = await connection.sendTransaction(tx, [payerKeypair]);
     console.log("signature:", signature);
   }
 }
@@ -154,31 +154,36 @@ export async function swapTokens(
     const { routesInfos } = await jupiter.computeRoutes({
       inputMint: tokenAccountInfo.mint,
       outputMint: USDC_MINT,
-      amount: JSBI.BigInt((tokenAccountInfo.amount.toNumber())),
+      amount: JSBI.BigInt(tokenAccountInfo.amount.toNumber()),
       slippage: 0.5, // It should be a small amount so slippage can be set wide
       forceFetch: true,
     });
     if (routesInfos.length > 1) {
       const bestRouteInfo = routesInfos[0]!;
 
-      if (JSBI.BigInt(bestRouteInfo.outAmount) < JSBI.BigInt((50_000))) {
+      if (JSBI.BigInt(bestRouteInfo.outAmount) < JSBI.BigInt(50_000)) {
         // Less than 10 cents so not worth attempting to swap
         console.log(
-          `Skipping swapping ${
-            JSBI.divide((bestRouteInfo.outAmount), JSBI.BigInt(Math.pow(10, 6)))
-          } worth of ${
+          `Skipping swapping ${JSBI.divide(
+            bestRouteInfo.outAmount,
+            JSBI.BigInt(Math.pow(10, 6))
+          )} worth of ${
             tokenAccountInfo.mint
           } in ${tokenAccountInfo.address.toBase58()}`
         );
         continue;
       }
 
-      expectedTotalOutAmount = JSBI.add(expectedTotalOutAmount, bestRouteInfo.outAmount) ;
+      expectedTotalOutAmount = JSBI.add(
+        expectedTotalOutAmount,
+        bestRouteInfo.outAmount
+      );
 
       console.log(
-        `Swap ${tokenAccountInfo.mint} for estimated ${
-          JSBI.divide((bestRouteInfo.outAmount), JSBI.BigInt(Math.pow(10, 6)))
-        } USDC`
+        `Swap ${tokenAccountInfo.mint} for estimated ${JSBI.divide(
+          bestRouteInfo.outAmount,
+          JSBI.BigInt(Math.pow(10, 6))
+        )} USDC`
       );
 
       if (dryRun) continue;

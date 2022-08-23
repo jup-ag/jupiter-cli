@@ -1,4 +1,4 @@
-import { Connection } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 import { Command } from "commander";
 import { RPC_ENDPOINT } from "./constants";
 import { createTokenAccounts, createTokenLedger, swapTokens } from "./janitor";
@@ -27,19 +27,35 @@ program
     "Tokens from the top to create an account for",
     "10"
   )
+  .option(
+    "-o, --owner",
+    "Use another base58 public key than the keypair as the owner, to allow easy setup on behalf of a hardware wallet or a multisig..."
+  )
+  .option(
+    "-a, --allow-owner-off-curve",
+    "Allow the associated token account owner to be off curve"
+  )
   .option("-d, --dry-run")
   .addHelpText(
     "beforeAll",
     "Create token accounts based on top tokens, to reduce setup when trading or to setup platform fee accounts"
   )
-  .action(async ({ keypair, tokensFromTop, dryRun }) => {
-    await createTokenAccounts(
-      CONNECTION,
-      loadKeypair(keypair),
-      tokensFromTop,
-      dryRun
-    );
-  });
+  .action(
+    async ({ keypair, owner, tokensFromTop, dryRun, allowOwnerOffCurve }) => {
+      const payerKeypair = loadKeypair(keypair);
+      const ownerPublicKey = owner
+        ? new PublicKey(owner)
+        : payerKeypair.publicKey;
+      await createTokenAccounts(
+        CONNECTION,
+        ownerPublicKey,
+        payerKeypair,
+        tokensFromTop,
+        dryRun,
+        allowOwnerOffCurve
+      );
+    }
+  );
 
 program
   .command("swap-tokens")
