@@ -1,10 +1,10 @@
-import { Connection } from "@solana/web3.js";
+import { Connection, PublicKey } from "@solana/web3.js";
 import { Command } from "commander";
-import { RPC_ENDPOINT } from "./constants";
-import { createTokenAccounts, createTokenLedger, swapTokens } from "./janitor";
+import { RPC_NODE_URL } from "./constants";
+import { createTokenAccounts, quote, swapTokens } from "./janitor";
 import { loadKeypair } from "./utils";
 
-const CONNECTION = new Connection(RPC_ENDPOINT);
+const CONNECTION = new Connection(RPC_NODE_URL);
 const KEEP_TOKEN_MINTS = new Set([
   "So11111111111111111111111111111111111111112", // wSOL
   "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // USDC
@@ -58,25 +58,32 @@ program
     );
   });
 
+function publicKeyFromString(s: string) {
+  return new PublicKey(s);
+}
+
 program
-  .command("create-token-ledger")
-  .requiredOption("-k, --keypair <keypair>")
-  .option(
-    "-t, --token-ledger-keypair <path>",
-    "Custom keypair for your token ledger"
+  .command("quote")
+  .requiredOption(
+    "--input-mint <mint>",
+    "input mint for the quote",
+    publicKeyFromString
   )
-  .option("-d, --dry-run")
-  .addHelpText(
-    "beforeAll",
-    "Create a custom token ledger that you can use to track your transactions on Jupiter"
+  .requiredOption(
+    "--output-mint <mint>",
+    "output mint for the quote",
+    publicKeyFromString
   )
-  .action(async ({ keypair, tokenLedgerKeypair, dryRun }) => {
-    await createTokenLedger(
-      CONNECTION,
-      loadKeypair(keypair),
-      tokenLedgerKeypair,
-      dryRun
-    );
+  .requiredOption("-a, --amount <amount>")
+  .option("-v, --verbose", "Verbose quote", false)
+  .action(async ({ inputMint, outputMint, amount, verbose }) => {
+    await quote({
+      connection: CONNECTION,
+      inputMint,
+      outputMint,
+      amount,
+      verbose,
+    });
   });
 
 program.parse();

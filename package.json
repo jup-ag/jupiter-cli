@@ -8,9 +8,9 @@
   "author": "Jupiter",
   "license": "MIT",
   "dependencies": {
-    "@jup-ag/core": "^2.0.0-beta.3",
+    "@jup-ag/core": "^4.0.0-beta.3",
     "@solana/spl-token": "0.1.8",
-    "@solana/web3.js": "^1.47.3",
+    "@solana/web3.js": "^1.73.0",
     "commander": "^9.1.0",
     "dotenv": "^16.0.0",
     "isomorphic-fetch": "^3.0.0",

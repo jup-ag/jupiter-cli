@@ -10,7 +10,7 @@ import { Connection, Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import fetch from "isomorphic-fetch";
 import { USDC_MINT } from "./constants";
 import { deserializeAccount, loadKeypair, sleep } from "./utils";
-import JSBI from 'jsbi';
+import JSBI from "jsbi";
 
 type Address = string;
 
@@ -154,31 +154,36 @@ export async function swapTokens(
     const { routesInfos } = await jupiter.computeRoutes({
       inputMint: tokenAccountInfo.mint,
       outputMint: USDC_MINT,
-      amount: JSBI.BigInt((tokenAccountInfo.amount.toNumber())),
-      slippage: 0.5, // It should be a small amount so slippage can be set wide
+      amount: JSBI.BigInt(tokenAccountInfo.amount.toNumber()),
+      slippageBps: 50, // It should be a small amount so slippage can be set wide
       forceFetch: true,
     });
     if (routesInfos.length > 1) {
       const bestRouteInfo = routesInfos[0]!;
 
-      if (JSBI.BigInt(bestRouteInfo.outAmount) < JSBI.BigInt((50_000))) {
+      if (JSBI.BigInt(bestRouteInfo.outAmount) < JSBI.BigInt(50_000)) {
         // Less than 10 cents so not worth attempting to swap
         console.log(
-          `Skipping swapping ${
-            JSBI.divide((bestRouteInfo.outAmount), JSBI.BigInt(Math.pow(10, 6)))
-          } worth of ${
+          `Skipping swapping ${JSBI.divide(
+            bestRouteInfo.outAmount,
+            JSBI.BigInt(Math.pow(10, 6))
+          )} worth of ${
             tokenAccountInfo.mint
           } in ${tokenAccountInfo.address.toBase58()}`
         );
         continue;
       }
 
-      expectedTotalOutAmount = JSBI.add(expectedTotalOutAmount, bestRouteInfo.outAmount) ;
+      expectedTotalOutAmount = JSBI.add(
+        expectedTotalOutAmount,
+        bestRouteInfo.outAmount
+      );
 
       console.log(
-        `Swap ${tokenAccountInfo.mint} for estimated ${
-          JSBI.divide((bestRouteInfo.outAmount), JSBI.BigInt(Math.pow(10, 6)))
-        } USDC`
+        `Swap ${tokenAccountInfo.mint} for estimated ${JSBI.divide(
+          bestRouteInfo.outAmount,
+          JSBI.BigInt(Math.pow(10, 6))
+        )} USDC`
       );
 
       if (dryRun) continue;
@@ -203,35 +208,51 @@ export async function swapTokens(
   );
 }
 
-export async function createTokenLedger(
-  connection: Connection,
-  userKeypair: Keypair,
-  ledgerKeypairPath: string | undefined = undefined,
-  dryRun: boolean
-) {
-  let ledgerKeypair: Keypair;
-  if (!ledgerKeypairPath) {
-    ledgerKeypair = Keypair.generate();
+export async function quote(params: {
+  connection: Connection;
+  inputMint: PublicKey;
+  outputMint: PublicKey;
+  amount: string;
+  verbose: boolean;
+}) {
+  const jupiter = await Jupiter.load({
+    connection: params.connection,
+    cluster: "mainnet-beta",
+    restrictIntermediateTokens: true, // We are not after absolute best price
+  });
+
+  const { routesInfos } = await jupiter.computeRoutes({
+    inputMint: params.inputMint,
+    outputMint: params.outputMint,
+    amount: JSBI.BigInt(params.amount),
+    slippageBps: 50, // It should be a small amount so slippage can be set wide
+    forceFetch: true,
+  });
+  if (routesInfos.length > 1) {
+    const bestRouteInfo = routesInfos[0]!;
+
+    if (params.verbose) {
+      console.log(bestRouteInfo);
+    }
+
+    const marketInfos = bestRouteInfo.marketInfos;
+    console.table([
+      { name: "inAmount", value: bestRouteInfo.inAmount.toString() },
+      { name: "outAmount", value: bestRouteInfo.outAmount.toString() },
+      {
+        name: "AMM labels",
+        value: marketInfos.map((mi) => mi.amm.label).join(","),
+      },
+      {
+        name: "mints",
+        value: [
+          params.inputMint.toString(),
+          ...marketInfos.map((mi) => mi.outputMint.toBase58()),
+        ],
+      },
+      { name: "routes", value: routesInfos.length },
+    ]);
   } else {
-    ledgerKeypair = loadKeypair(ledgerKeypairPath);
+    console.log("No route found");
   }
-
-  console.log(`Create token ledger ${ledgerKeypair.publicKey.toBase58()}`);
-
-  if (dryRun) return;
-
-  // Create the token ledger
-  let tx = new Transaction({ feePayer: userKeypair.publicKey });
-  tx.add(
-    Jupiter.createInitializeTokenLedgerInstruction(
-      ledgerKeypair.publicKey,
-      userKeypair.publicKey
-    )
-  );
-
-  const signature = await connection.sendTransaction(tx, [
-    userKeypair,
-    ledgerKeypair,
-  ]);
-  console.log("signature:", signature);
 }
