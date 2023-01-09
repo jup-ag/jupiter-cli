@@ -1,9 +1,10 @@
 {
   "name": "jupiter-cli",
   "version": "1.0.0",
-  "main": "index.js",
+  "bin": "dist/index.js",
   "scripts": {
-    "start": "tsc && node dist/index.js"
+    "postinstall": "yarn build",
+    "build": "tsc"
   },
   "author": "Jupiter",
   "license": "MIT",
