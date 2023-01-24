@@ -23,7 +23,7 @@ program
   .command("create-token-accounts")
   .requiredOption("-k, --keypair <keypair>")
   .option(
-    "-t, --tokens-from-top",
+    "-t, --tokens-from-top <number>",
     "Tokens from the top to create an account for",
     "10"
   )
