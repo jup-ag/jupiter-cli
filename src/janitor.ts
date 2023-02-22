@@ -6,7 +6,13 @@ import {
   AccountInfo as TokenAccountInfo,
   u64,
 } from "@solana/spl-token";
-import { Connection, Keypair, PublicKey, Transaction } from "@solana/web3.js";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+  Transaction,
+} from "@solana/web3.js";
 import fetch from "isomorphic-fetch";
 import { USDC_MINT } from "./constants";
 import { deserializeAccount, loadKeypair, sleep } from "./utils";
@@ -31,7 +37,8 @@ async function getTokenAccountInfos(
 
 export async function createTokenAccounts(
   connection: Connection,
-  userKeypair: Keypair,
+  payerKeypair: Keypair,
+  owner: PublicKey,
   tokensFromTop: number,
   dryRun: boolean
 ) {
@@ -41,10 +48,7 @@ export async function createTokenAccounts(
   ).json()) as Address[];
 
   const shortlistedTokens = new Set(topTokens.slice(0, tokensFromTop));
-  const tokenAccountInfos = await getTokenAccountInfos(
-    connection,
-    userKeypair.publicKey
-  );
+  const tokenAccountInfos = await getTokenAccountInfos(connection, owner);
   const exitingPlatformFeeAccountMints = new Set(
     tokenAccountInfos.map(({ mint }) => mint.toBase58())
   );
@@ -66,7 +70,7 @@ export async function createTokenAccounts(
   // Create ATAs for missing token accounts
   const shortlistedMints = Array.from(shortlistedTokens);
   while (shortlistedMints.length > 0) {
-    let tx = new Transaction({ feePayer: userKeypair.publicKey });
+    let tx = new Transaction({ feePayer: payerKeypair.publicKey });
 
     for (const mint of shortlistedMints.splice(0, 10)) {
       const mintPk = new PublicKey(mint);
@@ -74,7 +78,8 @@ export async function createTokenAccounts(
         ASSOCIATED_TOKEN_PROGRAM_ID,
         TOKEN_PROGRAM_ID,
         mintPk,
-        userKeypair.publicKey
+        owner,
+        true
       );
       tx.add(
         ...[
@@ -83,14 +88,16 @@ export async function createTokenAccounts(
             TOKEN_PROGRAM_ID,
             new PublicKey(mintPk),
             ta,
-            userKeypair.publicKey,
-            userKeypair.publicKey
+            owner,
+            payerKeypair.publicKey
           ),
         ]
       );
     }
 
-    const signature = await connection.sendTransaction(tx, [userKeypair]);
+    const signature = await sendAndConfirmTransaction(connection, tx, [
+      payerKeypair,
+    ]);
     console.log("signature:", signature);
   }
 }

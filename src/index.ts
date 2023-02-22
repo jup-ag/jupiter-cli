@@ -22,8 +22,9 @@ const program = new Command();
 program
   .command("create-token-accounts")
   .requiredOption("-k, --keypair <keypair>")
+  .option("-o, --owner <address>")
   .option(
-    "-t, --tokens-from-top",
+    "-t, --tokens-from-top <tokens-from-top>",
     "Tokens from the top to create an account for",
     "10"
   )
@@ -32,11 +33,13 @@ program
     "beforeAll",
     "Create token accounts based on top tokens, to reduce setup when trading or to setup platform fee accounts"
   )
-  .action(async ({ keypair, tokensFromTop, dryRun }) => {
+  .action(async ({ keypair, owner, tokensFromTop, dryRun }) => {
+    const loadedKeypair = loadKeypair(keypair);
     await createTokenAccounts(
       CONNECTION,
-      loadKeypair(keypair),
-      tokensFromTop,
+      loadedKeypair,
+      owner ? new PublicKey(owner) : keypair.publicKey,
+      Number(tokensFromTop),
       dryRun
     );
   });
