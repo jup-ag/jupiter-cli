@@ -168,12 +168,13 @@ export async function swapTokens(
     if (routesInfos.length > 1) {
       const bestRouteInfo = routesInfos[0]!;
 
+      const uiOutAmount = Number(bestRouteInfo.outAmount.toString())
+      / Math.pow(10, 6);
       if (JSBI.lessThan(bestRouteInfo.outAmount, JSBI.BigInt(10_000))) {
         // Less than 1 cents so not worth attempting to swap
         console.log(
           `Skipping swapping ${
-            Number(bestRouteInfo.outAmount.toString())
-            / Math.pow(10, 6)
+            uiOutAmount
           } worth of ${
             tokenAccountInfo.mint
           } in ${tokenAccountInfo.address.toBase58()}`
@@ -187,10 +188,7 @@ export async function swapTokens(
       );
 
       console.log(
-        `Swap ${tokenAccountInfo.mint} for estimated ${JSBI.divide(
-          bestRouteInfo.outAmount,
-          JSBI.BigInt(Math.pow(10, 6))
-        )} USDC`
+        `Swap ${tokenAccountInfo.mint} for estimated ${uiOutAmount} USDC`
       );
 
       if (dryRun) continue;
@@ -216,19 +214,13 @@ export async function swapTokens(
 }
 
 export async function quote(params: {
-  connection: Connection;
+  jupiter: Jupiter;
   inputMint: PublicKey;
   outputMint: PublicKey;
   amount: string;
   verbose: boolean;
 }) {
-  const jupiter = await Jupiter.load({
-    connection: params.connection,
-    cluster: "mainnet-beta",
-    restrictIntermediateTokens: true, // We are not after absolute best price
-  });
-
-  const { routesInfos } = await jupiter.computeRoutes({
+  const { routesInfos } = await params.jupiter.computeRoutes({
     inputMint: params.inputMint,
     outputMint: params.outputMint,
     amount: JSBI.BigInt(params.amount),
@@ -259,6 +251,7 @@ export async function quote(params: {
       },
       { name: "routes", value: routesInfos.length },
     ]);
+    return bestRouteInfo;
   } else {
     console.log("No route found");
   }

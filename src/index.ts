@@ -3,6 +3,8 @@ import { Command } from "commander";
 import { RPC_NODE_URL } from "./constants";
 import { createTokenAccounts, quote, swapTokens } from "./janitor";
 import { loadKeypair } from "./utils";
+import { Jupiter } from "@jup-ag/core";
+import { createInterface } from 'readline';
 
 const CONNECTION = new Connection(RPC_NODE_URL);
 const KEEP_TOKEN_MINTS = new Set([
@@ -79,14 +81,46 @@ program
   )
   .requiredOption("-a, --amount <amount>")
   .option("-v, --verbose", "Verbose quote", false)
-  .action(async ({ inputMint, outputMint, amount, verbose }) => {
-    await quote({
+  .option("-k, --keypair <KEYPAIR>", "")
+  .action(async ({ inputMint, outputMint, amount, keypair, verbose }) => {
+    const user = keypair ? loadKeypair(keypair) : undefined
+    const jupiter = await Jupiter.load({
       connection: CONNECTION,
+      cluster: "mainnet-beta",
+      restrictIntermediateTokens: true, // We are not after absolute best price
+      user
+    });
+    const bestRouteInfo = await quote({
+      jupiter,
       inputMint,
       outputMint,
       amount,
       verbose,
     });
+    if (user && bestRouteInfo) {
+      const rl = createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+
+      rl.question(">Execute the swap: y/N ", async (answer) => {
+        if (answer !== 'y') {
+          console.log('Not executing');
+          return;
+        }
+
+        const { execute } = await jupiter.exchange({routeInfo: bestRouteInfo});
+        const swapResult = await execute();
+        if ("txid" in swapResult) {
+          console.log("Executed swap, signature:", swapResult.txid);
+        } else if ("error" in swapResult) {
+          console.log("error:", swapResult.error);
+        }
+
+        rl.close();
+      });
+
+    }
   });
 
 program.parse();
