@@ -168,13 +168,13 @@ export async function swapTokens(
     if (routesInfos.length > 1) {
       const bestRouteInfo = routesInfos[0]!;
 
-      if (JSBI.BigInt(bestRouteInfo.outAmount) < JSBI.BigInt(50_000)) {
-        // Less than 10 cents so not worth attempting to swap
+      if (JSBI.lessThan(bestRouteInfo.outAmount, JSBI.BigInt(10_000))) {
+        // Less than 1 cents so not worth attempting to swap
         console.log(
-          `Skipping swapping ${JSBI.divide(
-            bestRouteInfo.outAmount,
-            JSBI.BigInt(Math.pow(10, 6))
-          )} worth of ${
+          `Skipping swapping ${
+            Number(bestRouteInfo.outAmount.toString())
+            / Math.pow(10, 6)
+          } worth of ${
             tokenAccountInfo.mint
           } in ${tokenAccountInfo.address.toBase58()}`
         );
@@ -211,7 +211,7 @@ export async function swapTokens(
 
   console.log(
     "Expected total out amount (raw amount):",
-    expectedTotalOutAmount
+    expectedTotalOutAmount.toString()
   );
 }
 
