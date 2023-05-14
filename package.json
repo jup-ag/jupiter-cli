@@ -12,6 +12,7 @@
     "@jup-ag/core": "4.0.0-beta.17",
     "@solana/spl-token": "0.1.8",
     "@solana/web3.js": "^1.75.0",
+    "axios": "^1.4.0",
     "commander": "^9.1.0",
     "dotenv": "^16.0.0",
     "isomorphic-fetch": "^3.0.0",
