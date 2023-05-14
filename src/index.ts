@@ -47,6 +47,36 @@ program
   });
 
 program
+  .command("get-token-accounts")
+  .option("-o, --owner <address>")
+  .option("-t, --table", "Display as a table")
+  .addHelpText("beforeAll", "Get token accounts owned by an address")
+  .action(async ({ owner, table }) => {
+    const tableData: Record<string, string>[] = [];
+    (await getPlatformFeeAccounts(CONNECTION, new PublicKey(owner))).forEach(
+      (account, mint) => {
+        tableData.push({
+          "Token Mint Address": mint,
+          "Token Fee Account Address": account.toBase58(),
+        });
+      }
+    );
+    if (tableData.length === 0) {
+      return console.log(`No token accounts found for ${owner}`);
+    }
+
+    if (table) {
+      console.table(tableData);
+    } else {
+      console.log(
+        [Object.keys(tableData[0]!).join(",")]
+          .concat(tableData.map((t) => Object.values(t).join(",")))
+          .join("\n")
+      );
+    }
+  });
+
+program
   .command("swap-tokens")
   .requiredOption("-k, --keypair <KEYPAIR>")
   .option("-d, --dry-run")
