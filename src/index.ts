@@ -1,12 +1,17 @@
 #!/usr/bin/env node
 
 import { Connection, PublicKey } from "@solana/web3.js";
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import { RPC_NODE_URL } from "./constants";
-import { createTokenAccounts, quote, swapTokens } from "./janitor";
-import { loadKeypair } from "./utils";
-import { Jupiter } from "@jup-ag/core";
-import { createInterface } from 'readline';
+import {
+  createTokenAccounts,
+  fetchAndExecuteSwapTransaction,
+  quote,
+  swapTokens,
+} from "./janitor";
+import { fetchPriorityFee, loadKeypair } from "./utils";
+import { createJupiterApiClient } from "@jup-ag/api";
+import { createInterface } from "readline";
 
 const CONNECTION = new Connection(RPC_NODE_URL);
 const KEEP_TOKEN_MINTS = new Set([
@@ -22,10 +27,12 @@ const KEEP_TOKEN_MINTS = new Set([
 ]);
 
 const program = new Command();
-
+const keypairOption = new Option("-k, --keypair <keypair-path>")
+  .env("KEYPAIR")
+  .makeOptionMandatory(true);
 program
   .command("create-token-accounts")
-  .requiredOption("-k, --keypair <keypair>")
+  .addOption(keypairOption)
   .option("-o, --owner <address>")
   .option(
     "-t, --tokens-from-top <tokens-from-top>",
@@ -50,7 +57,7 @@ program
 
 program
   .command("swap-tokens")
-  .requiredOption("-k, --keypair <KEYPAIR>")
+  .addOption(keypairOption)
   .option("-d, --dry-run")
   .addHelpText(
     "beforeAll",
@@ -83,45 +90,39 @@ program
   )
   .requiredOption("-a, --amount <amount>")
   .option("-v, --verbose", "Verbose quote", false)
-  .option("-k, --keypair <KEYPAIR>", "")
+  .addOption(keypairOption)
   .action(async ({ inputMint, outputMint, amount, keypair, verbose }) => {
-    const user = keypair ? loadKeypair(keypair) : undefined
-    const jupiter = await Jupiter.load({
-      connection: CONNECTION,
-      cluster: "mainnet-beta",
-      restrictIntermediateTokens: true, // We are not after absolute best price
-      user
-    });
-    const bestRouteInfo = await quote({
-      jupiter,
+    const user = keypair ? loadKeypair(keypair) : undefined;
+
+    const quoteResponse = await quote({
       inputMint,
       outputMint,
       amount,
       verbose,
     });
-    if (user && bestRouteInfo) {
+    if (user && quoteResponse) {
       const rl = createInterface({
         input: process.stdin,
-        output: process.stdout
+        output: process.stdout,
       });
 
       rl.question(">Execute the swap: y/N ", async (answer) => {
-        if (answer !== 'y') {
-          console.log('Not executing');
+        if (answer.toLowerCase() !== "y") {
+          console.log("Not executing");
           return;
         }
 
-        const { execute } = await jupiter.exchange({routeInfo: bestRouteInfo});
-        const swapResult = await execute();
-        if ("txid" in swapResult) {
-          console.log("Executed swap, signature:", swapResult.txid);
-        } else if ("error" in swapResult) {
-          console.log("error:", swapResult.error);
-        }
+        const priorityFee = await fetchPriorityFee();
+
+        await fetchAndExecuteSwapTransaction({
+          connection: CONNECTION,
+          quoteResponse,
+          userKeypair: user,
+          priorityFee,
+        });
 
         rl.close();
       });
-
     }
   });
 

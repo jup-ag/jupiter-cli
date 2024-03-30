@@ -1,10 +1,10 @@
 import {
   AccountLayout,
-  AccountInfo as TokenAccountInfo,
+  type AccountInfo as TokenAccountInfo,
   u64,
 } from "@solana/spl-token";
 import { Keypair, PublicKey } from "@solana/web3.js";
-import fs from "fs";
+import * as fs from "fs";
 
 export function deserializeAccount(
   address: PublicKey,
@@ -54,4 +54,14 @@ export function loadKeypair(keypairPath: string): Keypair {
   );
 
   return loaded;
+}
+
+export async function fetchPriorityFee() {
+  return await (
+    (
+      await fetch("https://cache.jup.ag/jup-claim-reference-fees")
+    ).json() as Promise<{
+      jup2: { m: number };
+    }>
+  ).then((res) => res.jup2.m);
 }
