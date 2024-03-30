@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { Connection, PublicKey } from "@solana/web3.js";
 import { Command } from "commander";
 import { RPC_NODE_URL } from "./constants";

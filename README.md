@@ -6,12 +6,19 @@ What the CLI is trained to do:
 - Convert spill or fee tokens back to desired mint
 - Provide the level of hygiene of a wallet
 
-## To start
+## Usage
 
-1. You first need to install all the dependencies with `yarn`.
-2. Locate or [setup your file system wallet](https://docs.solana.com/wallet-guide/file-system-wallet#:~:text=A%20file%20system%20wallet%20exists,system%20wallet%20is%20not%20recommended.) file
-3. Run `yarn start help` to see all the commands. You can also run `yarn start help command` to see what each command is for.
+Locate or [setup your file system wallet](https://docs.solana.com/wallet-guide/file-system-wallet#:~:text=A%20file%20system%20wallet%20exists,system%20wallet%20is%20not%20recommended.) file.
 
-## Example
+Run `npx jupiter-cli help` to see all the commands. You can also run `npx . help command` to see what each command is for.
 
-`yarn start swap-tokens --keypair wallet.json`
+### Example
+
+`npx jupiter-cli swap-tokens --keypair wallet.json`
+
+## Running locally
+
+1. Clone the repository
+2. Install all the dependencies with `yarn`
+3. Ensure you have a file system wallet as described above
+4. Run `npx . help` to see all the commands. You will need to run `yarn build` after making any changes to the code, before running `npx .` again.
