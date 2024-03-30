@@ -1,9 +1,8 @@
-import { Jupiter } from "@jup-ag/core";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   Token,
   TOKEN_PROGRAM_ID,
-  AccountInfo as TokenAccountInfo,
+  type AccountInfo as TokenAccountInfo,
   u64,
 } from "@solana/spl-token";
 import {
@@ -12,11 +11,22 @@ import {
   PublicKey,
   sendAndConfirmTransaction,
   Transaction,
+  VersionedTransaction,
 } from "@solana/web3.js";
 import fetch from "isomorphic-fetch";
-import { USDC_MINT } from "./constants";
-import { deserializeAccount, loadKeypair, sleep } from "./utils";
+import { jupiterApiClient, USDC_MINT } from "./constants";
+import {
+  deserializeAccount,
+  fetchPriorityFee,
+  loadKeypair,
+  sleep,
+} from "./utils";
 import JSBI from "jsbi";
+import {
+  handleSendTransaction,
+  modifyPriorityFeeIx,
+} from "@mercurial-finance/optimist";
+import type { QuoteResponse, SwapRequest } from "@jup-ag/api";
 
 type Address = string;
 
@@ -115,27 +125,14 @@ export async function swapTokens(
   keepTokenMints: Set<Address>,
   dryRun: boolean
 ) {
+  const priorityFee = await fetchPriorityFee();
   const tokenAccountInfos = await getTokenAccountInfos(
     connection,
     userKeypair.publicKey
   );
 
-  const jupiter = await Jupiter.load({
-    connection,
-    cluster: "mainnet-beta",
-    user: userKeypair,
-    restrictIntermediateTokens: true, // We are not after absolute best price
-    wrapUnwrapSOL: false,
-  });
-
   const tokenAccountInfosToSwap = tokenAccountInfos.filter(
     ({ mint }) => !keepTokenMints.has(mint.toBase58())
-  );
-
-  const routeMap = jupiter.getRouteMap();
-
-  console.log(
-    `Token accounts to swap back to USDC: ${tokenAccountInfosToSwap.length}`
   );
 
   let expectedTotalOutAmount = JSBI.BigInt(0);
@@ -145,65 +142,59 @@ export async function swapTokens(
       continue;
     }
 
+    console.log(
+      "fetching quote for token mint:",
+      tokenAccountInfo.mint.toBase58()
+    );
+    let quoteResponse: QuoteResponse | undefined;
+    try {
+      quoteResponse = await jupiterApiClient.quoteGet({
+        inputMint: tokenAccountInfo.mint.toBase58(),
+        outputMint: USDC_MINT.toBase58(),
+        amount: JSBI.BigInt(
+          tokenAccountInfo.amount.toNumber()
+        ).toString() as any,
+        slippageBps: 50, // It should be a small amount so slippage can be set wide
+      });
+    } catch (e) {
+      console.error("quote failed", e);
+    }
+
+    if (!quoteResponse) {
+      continue;
+    }
+
+    let outAmount = JSBI.BigInt(quoteResponse.outAmount.toString());
+    const uiOutAmount =
+      Number(quoteResponse.outAmount.toString()) / Math.pow(10, 6);
     if (
-      !routeMap
-        .get(tokenAccountInfo.mint.toBase58())
-        ?.includes(USDC_MINT.toBase58())
+      JSBI.lessThan(
+        JSBI.BigInt(quoteResponse.outAmount.toString()),
+        JSBI.BigInt(10_000)
+      )
     ) {
+      // Less than 1 cents so not worth attempting to swap
       console.log(
-        `Skipping swapping ${tokenAccountInfo.amount.toNumber()} of ${
+        `Skipping swapping ${uiOutAmount} worth of ${
           tokenAccountInfo.mint
-        } because no route available in route map for this token`
+        } in ${tokenAccountInfo.address.toBase58()}`
       );
       continue;
     }
 
-    const { routesInfos } = await jupiter.computeRoutes({
-      inputMint: tokenAccountInfo.mint,
-      outputMint: USDC_MINT,
-      amount: JSBI.BigInt(tokenAccountInfo.amount.toNumber()),
-      slippageBps: 50, // It should be a small amount so slippage can be set wide
-      forceFetch: true,
+    expectedTotalOutAmount = JSBI.add(expectedTotalOutAmount, outAmount);
+
+    console.log(
+      `Swap ${tokenAccountInfo.mint} for estimated ${uiOutAmount} USDC`
+    );
+
+    if (dryRun) continue;
+    fetchAndExecuteSwapTransaction({
+      connection,
+      quoteResponse: quoteResponse,
+      userKeypair,
+      priorityFee,
     });
-    if (routesInfos.length > 1) {
-      const bestRouteInfo = routesInfos[0]!;
-
-      const uiOutAmount = Number(bestRouteInfo.outAmount.toString())
-      / Math.pow(10, 6);
-      if (JSBI.lessThan(bestRouteInfo.outAmount, JSBI.BigInt(10_000))) {
-        // Less than 1 cents so not worth attempting to swap
-        console.log(
-          `Skipping swapping ${
-            uiOutAmount
-          } worth of ${
-            tokenAccountInfo.mint
-          } in ${tokenAccountInfo.address.toBase58()}`
-        );
-        continue;
-      }
-
-      expectedTotalOutAmount = JSBI.add(
-        expectedTotalOutAmount,
-        bestRouteInfo.outAmount
-      );
-
-      console.log(
-        `Swap ${tokenAccountInfo.mint} for estimated ${uiOutAmount} USDC`
-      );
-
-      if (dryRun) continue;
-
-      const { execute } = await jupiter.exchange({
-        routeInfo: bestRouteInfo,
-      });
-      const swapResult = await execute();
-      if ("txid" in swapResult) {
-        console.log("Executed swap, signature:", swapResult.txid);
-      } else if ("error" in swapResult) {
-        console.log("error:", swapResult.error);
-      }
-    }
-
     await sleep(500); // Wait to avoid potential rate limits when fetching data
   }
 
@@ -214,45 +205,86 @@ export async function swapTokens(
 }
 
 export async function quote(params: {
-  jupiter: Jupiter;
   inputMint: PublicKey;
   outputMint: PublicKey;
   amount: string;
   verbose: boolean;
 }) {
-  const { routesInfos } = await params.jupiter.computeRoutes({
-    inputMint: params.inputMint,
-    outputMint: params.outputMint,
-    amount: JSBI.BigInt(params.amount),
-    slippageBps: 50, // It should be a small amount so slippage can be set wide
-    forceFetch: true,
+  const route = await jupiterApiClient.quoteGet({
+    amount: params.amount as any, // string is fine
+    inputMint: params.inputMint.toBase58(),
+    outputMint: params.outputMint.toBase58(),
+    slippageBps: 50,
+    maxAccounts: 60,
   });
-  if (routesInfos.length > 1) {
-    const bestRouteInfo = routesInfos[0]!;
-
+  if ("outAmount" in route) {
     if (params.verbose) {
-      console.log(bestRouteInfo);
+      console.log(route);
     }
 
-    const marketInfos = bestRouteInfo.marketInfos;
+    const { routePlan } = route;
     console.table([
-      { name: "inAmount", value: bestRouteInfo.inAmount.toString() },
-      { name: "outAmount", value: bestRouteInfo.outAmount.toString() },
+      { name: "inAmount", value: route.inAmount.toString() },
+      { name: "outAmount", value: route.outAmount.toString() },
       {
         name: "AMM labels",
-        value: marketInfos.map((mi) => mi.amm.label).join(","),
+        value: routePlan.map((mi) => mi.swapInfo.label).join(","),
       },
       {
         name: "mints",
         value: [
           params.inputMint.toString(),
-          ...marketInfos.map((mi) => mi.outputMint.toBase58()),
+          ...routePlan.map((mi) => mi.swapInfo.outputMint),
         ],
       },
-      { name: "routes", value: routesInfos.length },
     ]);
-    return bestRouteInfo;
+    return route;
   } else {
     console.log("No route found");
   }
 }
+
+export const fetchAndExecuteSwapTransaction = async ({
+  connection,
+  quoteResponse,
+  userKeypair,
+  priorityFee,
+}: {
+  quoteResponse: QuoteResponse;
+  userKeypair: Keypair;
+  connection: Connection;
+  priorityFee?: number;
+}) => {
+  const swapResponse = await jupiterApiClient.swapPost({
+    swapRequest: {
+      quoteResponse: quoteResponse,
+      userPublicKey: userKeypair.publicKey.toBase58(),
+      computeUnitPriceMicroLamports: 1,
+      dynamicComputeUnitLimit: true,
+    },
+  });
+
+  const versionedTransaction = VersionedTransaction.deserialize(
+    Buffer.from(swapResponse.swapTransaction, "base64")
+  );
+
+  if (priorityFee) {
+    modifyPriorityFeeIx(versionedTransaction, priorityFee);
+  }
+
+  versionedTransaction.sign([userKeypair]);
+
+  const swapResult = await handleSendTransaction({
+    blockhash: versionedTransaction.message.recentBlockhash,
+    lastValidBlockHeight: swapResponse.lastValidBlockHeight,
+    connection,
+    signedTransaction: versionedTransaction,
+  });
+
+  if ("txid" in swapResult) {
+    console.log({ swapResult });
+    console.log("Executed swap, signature:", swapResult.txid);
+  } else if ("error" in swapResult) {
+    console.log("error:", swapResult.error);
+  }
+};
