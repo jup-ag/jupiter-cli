@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Connection, PublicKey } from "@solana/web3.js";
+import axios from "axios";
 import { Command } from "commander";
 import { RPC_NODE_URL } from "./constants";
 import { createTokenAccounts, quote, swapTokens } from "./janitor";
@@ -46,6 +47,42 @@ program
       Number(tokensFromTop),
       dryRun
     );
+  });
+
+program
+  .command("get-token-accounts")
+  .option("-o, --owner <address>")
+  .option("-t, --table", "Display as a table")
+  .addHelpText("beforeAll", "Get token accounts owned by an address")
+  .action(async ({ owner, table }) => {
+    const { data: tokens } = await axios.get("https://token.jup.ag/strict");
+    const tableData: Record<string, string>[] = [];
+    (await getPlatformFeeAccounts(CONNECTION, new PublicKey(owner))).forEach(
+      (account, mint) => {
+        const token = tokens.find(
+          ({ address }: { address: string }) => address === mint.toString()
+        );
+        tableData.push({
+          Token: token
+            ? `${token.name} (${token.symbol})`.replace(/,/g, "")
+            : "???",
+          "Mint Address": mint,
+          "Fee Account Address": account.toBase58(),
+        });
+      }
+    );
+    if (tableData.length === 0) {
+      return console.log(`No token accounts found for ${owner}`);
+    }
+    if (table) {
+      console.table(tableData);
+    } else {
+      console.log(
+        [Object.keys(tableData[0]!).join(",")]
+          .concat(tableData.map((t) => Object.values(t).join(",")))
+          .join("\n")
+      );
+    }
   });
 
 program
